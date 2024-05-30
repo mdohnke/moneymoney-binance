@@ -23,8 +23,8 @@ Once downloaded, move `binance.lua` to your MoneyMoney Extensions folder.
 ### Binance
 
 1. Log in to your Binance account
-2. Go to [User center -> Create API Key](https://www.binance.com/userCenter/createApi.html)
-3. Create new API key with "Read Info" permissions
+2. Go to [Account > API Management](https://www.binance.com/my/settings/api-management)
+3. Click the "Create API" button
 
 ### MoneyMoney
 
