@@ -139,7 +139,7 @@ end
 
 function queryPrivate(method)
   local path = string.format("/%s/%s", "v3", method)
-  local timestamp = string.format("%d", MM.time() * 1000)
+  local timestamp = string.format("%d", math.floor(MM.time() * 1000))
   local params = "timestamp=" .. timestamp
   local apiSign = MM.hmac256(apiSecret, params)
 
