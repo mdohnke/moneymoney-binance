@@ -25,7 +25,7 @@
 -- SOFTWARE.
 
 WebBanking {
-  version     = 1.4,
+  version     = 1.5,
   url         = "https://api.binance.com/api",
   description = "Fetch balances from Binance API and list them as securities",
   services    = { "Binance Account" },
@@ -35,13 +35,6 @@ local apiKey
 local apiSecret
 local balances
 local currency
-
-local currencySymbols = {
-  BCC  = "BCH",
-  IOTA = "MIOTA",
-  NANO = "XRB",
-  YOYO = "YOYOW"
-}
 
 function SupportsBank (protocol, bankCode)
   return protocol == ProtocolWebBanking and bankCode == "Binance Account"
@@ -68,9 +61,11 @@ end
 function RefreshAccount (account, since)
   balances = queryPrivate("account")["balances"]
   mergeEarnings()
-  local eurPrices = queryCryptoCompare("pricemulti", "?fsyms=" .. assetPrices() .. "&tsyms=EUR")
-  local fallbackTable = {}
-  fallbackTable["EUR"] = 0
+
+  local pricesBySymbol = {}
+  for _, ticker in ipairs(queryPublic("ticker/price")) do
+    pricesBySymbol[ticker["symbol"]] = tonumber(ticker["price"])
+  end
 
   local s = {}
   for key, value in pairs(balances) do
@@ -80,7 +75,7 @@ function RefreshAccount (account, since)
         market = market,
         currency = nil,
         quantity = value["free"],
-        price = (eurPrices[symbolForAsset(value["asset"])] or fallbackTable)["EUR"],
+        price = priceInEur(value["asset"], pricesBySymbol),
       }
     end
   end
@@ -88,8 +83,31 @@ function RefreshAccount (account, since)
   return {securities = s}
 end
 
-function symbolForAsset(asset)
-  return currencySymbols[asset] or asset
+-- Binance does not list a EUR pair for every asset, so fall back to
+-- converting via USDT or BTC, whichever pair is available.
+function priceInEur(asset, pricesBySymbol)
+  if asset == "EUR" then
+    return 1
+  end
+
+  local direct = pricesBySymbol[asset .. "EUR"]
+  if direct then
+    return direct
+  end
+
+  local usdt = pricesBySymbol[asset .. "USDT"]
+  local eurUsdt = pricesBySymbol["EURUSDT"]
+  if usdt and eurUsdt then
+    return usdt / eurUsdt
+  end
+
+  local btc = pricesBySymbol[asset .. "BTC"]
+  local btcEur = pricesBySymbol["BTCEUR"]
+  if btc and btcEur then
+    return btc * btcEur
+  end
+
+  return 0
 end
 
 function mergeEarnings()
@@ -108,16 +126,6 @@ function mergeEarnings()
       end
     end
   end
-end
-
-function assetPrices()
-  local assets = ""
-  for key, value in pairs(balances) do
-    if tonumber(value["free"]) > 0 then
-      assets = assets .. symbolForAsset(value["asset"]) .. ','
-    end
-  end
-  return assets
 end
 
 function EndSession ()
@@ -146,11 +154,11 @@ function queryPrivate(method)
   return json:dictionary()
 end
 
-function queryCryptoCompare(method, query)
-  local path = string.format("/%s/%s", "data", method)
+function queryPublic(method)
+  local path = string.format("/%s/%s", "v3", method)
 
   connection = Connection()
-  content = connection:request("GET", "https://min-api.cryptocompare.com" .. path .. query)
+  content = connection:request("GET", url .. path)
   json = JSON(content)
 
   return json:dictionary()
