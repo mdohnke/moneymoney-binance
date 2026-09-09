@@ -63,8 +63,11 @@ function RefreshAccount (account, since)
   mergeEarnings()
 
   local pricesBySymbol = {}
-  for _, ticker in ipairs(queryPublic("ticker/price")) do
-    pricesBySymbol[ticker["symbol"]] = tonumber(ticker["price"])
+  for _, ticker in ipairs(queryPublic("ticker/price?symbolStatus=TRADING")) do
+    local price = tonumber(ticker["price"])
+    if price and price > 0 then
+      pricesBySymbol[ticker["symbol"]] = price
+    end
   end
 
   local s = {}
@@ -90,13 +93,20 @@ function priceInEur(asset, pricesBySymbol)
     return 1
   end
 
+  local eurUsdt = pricesBySymbol["EURUSDT"]
+
+  -- Binance quotes USDT itself only as the quote currency (e.g.
+  -- BTCUSDT), so there is no USDTUSDT/USDTEUR/USDTBTC pair to look up.
+  if asset == "USDT" and eurUsdt then
+    return 1 / eurUsdt
+  end
+
   local direct = pricesBySymbol[asset .. "EUR"]
   if direct then
     return direct
   end
 
   local usdt = pricesBySymbol[asset .. "USDT"]
-  local eurUsdt = pricesBySymbol["EURUSDT"]
   if usdt and eurUsdt then
     return usdt / eurUsdt
   end
